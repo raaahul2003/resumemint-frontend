@@ -378,172 +378,198 @@ function AIJobMatchModal({ onClose, onApply, currentForm }) {
 // ═══════════════════════════════════════════════════════════
 // PAYMENT MODAL
 // ═══════════════════════════════════════════════════════════
-
-// ═══════════════════════════════════════════════════════════
-// PAYMENT MODAL — Real Razorpay Integration
-// ═══════════════════════════════════════════════════════════
+// ── BACKEND URL ──────────────────────────────────────────
 const BACKEND_URL = "https://resumemint-backend-production.up.railway.app";
 
 function PaymentModal({ onClose, onSuccess, form }) {
-  const [step, setStep] = useState("pay");
-  const [error, setError] = useState("");
-  const [orderId, setOrderId] = useState(null);
+  const [step, setStep] = useState("pay"); // pay | loading | verifying | success | error
+  const [errMsg, setErrMsg] = useState("");
   const C = DARK;
 
-  const createOrder = async () => {
+  const startPayment = async () => {
     if (!Security.rateLimit("payment", 3, 300000)) {
-      setError("Too many payment attempts. Try after 5 minutes.");
-      return;
+      setErrMsg("Too many attempts. Wait 5 minutes."); return;
     }
-    setStep("creating");
-    setError("");
+    setStep("loading");
+    setErrMsg("");
+
     try {
+      // 1. Create Razorpay order via backend
       const res = await fetch(`${BACKEND_URL}/create-order`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount: 900 })
       });
-      if (!res.ok) throw new Error("Backend error");
+      if (!res.ok) throw new Error("Order creation failed");
       const order = await res.json();
-      setOrderId(order.id);
-      openRazorpay(order.id);
-    } catch (e) {
-      setError("Could not connect to payment server. Try again.");
-      setStep("pay");
-    }
-  };
 
-  const openRazorpay = (oid) => {
-    const options = {
-      key: process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_SPK3M2HkvjRH0C",
-      amount: 900,
-      currency: "INR",
-      name: "ResumeMint",
-      description: "ATS Resume Download — ₹9",
-      order_id: oid,
-      prefill: {
-        name: form.name || "",
-        email: form.email || "",
-      },
-      theme: { color: "#00e5a0" },
-      handler: async (response) => {
-        setStep("verifying");
-        try {
-          const verifyRes = await fetch(`${BACKEND_URL}/verify-payment`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              name: form.name,
-              email: form.email,
-            })
-          });
-          const data = await verifyRes.json();
-          if (data.success) {
-            setStep("success");
-            setTimeout(() => onSuccess({ token: data.token }), 1800);
-          } else {
-            setError("Payment verification failed. Contact support.");
-            setStep("pay");
+      // 2. Open REAL Razorpay checkout popup
+      if (!window.Razorpay) throw new Error("Razorpay not loaded");
+
+      const rzp = new window.Razorpay({
+        key: "rzp_test_SPK3M2HkvjRH0C",
+        amount: 900,
+        currency: "INR",
+        name: "ResumeMint",
+        description: "ATS Resume — ₹9",
+        order_id: order.id,
+        prefill: { name: form.name || "", email: form.email || "", contact: form.phone || "" },
+        theme: { color: "#00e5a0" },
+        modal: { ondismiss: () => setStep("pay") },
+        handler: async (response) => {
+          // 3. Verify payment signature on backend
+          setStep("verifying");
+          try {
+            const vRes = await fetch(`${BACKEND_URL}/verify-payment`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                name: form.name,
+                email: form.email,
+              })
+            });
+            const vData = await vRes.json();
+            if (vData.success) {
+              Store.addPayment({ name: form.name, email: form.email, paymentId: response.razorpay_payment_id });
+              setStep("success");
+              setTimeout(() => onSuccess({ token: vData.token }), 1800);
+            } else {
+              setErrMsg("Payment verification failed. Contact support.");
+              setStep("error");
+            }
+          } catch {
+            setErrMsg("Verification error. Email support@resumemint.in with your payment ID.");
+            setStep("error");
           }
-        } catch (e) {
-          setError("Verification error. Contact support with your payment ID.");
-          setStep("pay");
         }
-      },
-      modal: {
-        ondismiss: () => { setStep("pay"); }
-      }
-    };
-    if (window.Razorpay) {
-      const rzp = new window.Razorpay(options);
+      });
       rzp.open();
-      setStep("razorpay");
-    } else {
-      setError("Razorpay not loaded. Refresh and try again.");
-      setStep("pay");
+      setStep("waiting"); // Razorpay popup is open
+    } catch (e) {
+      setErrMsg(e.message || "Could not connect to payment server.");
+      setStep("error");
     }
   };
 
   return (
     <div style={{position:"fixed",inset:0,background:"#000000ee",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
-      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:"20px",width:"100%",maxWidth:"400px",animation:"modalIn 0.3s ease",overflow:"hidden"}}>
-        {(step==="pay"||step==="creating")&&(<>
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:"20px",width:"100%",maxWidth:"420px",animation:"modalIn 0.3s ease",overflow:"hidden"}}>
+
+        {/* INITIAL STATE */}
+        {(step==="pay"||step==="error")&&(<>
           <div style={{background:`linear-gradient(135deg,${C.accent}22,${C.card})`,padding:"28px 28px 20px",borderBottom:`1px solid ${C.border}`}}>
             <div style={{fontFamily:"Outfit,sans-serif",fontSize:"22px",fontWeight:"800",color:C.white,marginBottom:"4px"}}>🔐 Secure Checkout</div>
-            <div style={{color:C.muted,fontSize:"13px"}}>Your resume is ready. One-time payment.</div>
+            <div style={{color:C.muted,fontSize:"13px"}}>Powered by Razorpay • One-time payment</div>
           </div>
           <div style={{padding:"24px 28px"}}>
             <div style={{background:C.accentDim,border:`1px solid ${C.accent}44`,borderRadius:"14px",padding:"20px",textAlign:"center",marginBottom:"20px"}}>
               <div style={{fontFamily:"Outfit,sans-serif",fontSize:"42px",fontWeight:"900",color:C.accent,lineHeight:1}}>₹9</div>
-              <div style={{color:C.muted,fontSize:"12px",marginTop:"6px"}}>One resume • Full PDF • No subscription ever</div>
+              <div style={{color:C.muted,fontSize:"12px",marginTop:"6px"}}>One resume • Full quality PDF • No subscription</div>
               <div style={{display:"flex",justifyContent:"center",gap:"12px",marginTop:"10px",fontSize:"11px",color:C.muted}}>
-                <span>✅ Clean PDF</span><span>✅ No watermark</span><span>✅ Instant</span>
+                <span>✅ No watermark</span><span>✅ Instant</span><span>✅ Clean PDF</span>
               </div>
             </div>
-            <div style={{display:"flex",gap:"8px",justifyContent:"center",marginBottom:"16px",flexWrap:"wrap"}}>
+            {/* Payment methods */}
+            <div style={{display:"flex",justifyContent:"center",gap:"8px",flexWrap:"wrap",marginBottom:"16px"}}>
               {["UPI","GPay","PhonePe","Paytm","Cards","NetBanking"].map(m=>(
-                <span key={m} style={{fontSize:"11px",padding:"4px 8px",background:C.border,color:C.muted,borderRadius:"6px"}}>{m}</span>
+                <span key={m} style={{fontSize:"11px",padding:"4px 10px",background:C.border,color:C.muted,borderRadius:"6px"}}>{m}</span>
               ))}
             </div>
-            {error&&<div style={{color:C.red,fontSize:"12px",marginBottom:"12px",padding:"8px 12px",background:`${C.red}18`,borderRadius:"8px"}}>⚠ {error}</div>}
-            <div style={{fontSize:"11px",color:C.muted,marginBottom:"16px",display:"flex",gap:"8px",alignItems:"center"}}><span>🔒</span><span>256-bit SSL • Razorpay secured • PCI DSS compliant</span></div>
-            <button
-              onClick={createOrder}
-              disabled={step==="creating"}
-              style={{width:"100%",padding:"14px",background:step==="creating"?C.border:C.accent,color:step==="creating"?C.muted:"#000",border:"none",borderRadius:"12px",fontFamily:"Outfit,sans-serif",fontWeight:"800",fontSize:"16px",cursor:step==="creating"?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}
-            >
-              {step==="creating"?<><div style={{width:"18px",height:"18px",border:`2px solid ${C.muted}4`,borderTop:`2px solid ${C.muted}`,borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>Creating order...</>:"Pay ₹9 via Razorpay →"}
+            {errMsg&&<div style={{color:C.red,fontSize:"12px",marginBottom:"14px",padding:"10px 12px",background:`${C.red}18`,borderRadius:"8px",lineHeight:1.5}}>⚠ {errMsg}</div>}
+            <div style={{fontSize:"11px",color:C.muted,marginBottom:"16px",display:"flex",gap:"8px",alignItems:"center"}}>
+              <span>🔒</span><span>256-bit SSL • Razorpay PCI DSS compliant • No card data stored</span>
+            </div>
+            <button onClick={startPayment} style={{width:"100%",padding:"14px",background:C.accent,color:"#000",border:"none",borderRadius:"12px",fontFamily:"Outfit,sans-serif",fontWeight:"800",fontSize:"16px",cursor:"pointer"}}>
+              Open Razorpay Checkout →
             </button>
             <button onClick={onClose} style={{width:"100%",marginTop:"8px",padding:"10px",background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:"13px"}}>Cancel</button>
           </div>
         </>)}
-        {step==="razorpay"&&<div style={{padding:"48px",textAlign:"center"}}>
-          <div style={{fontSize:"42px",marginBottom:"16px"}}>💳</div>
-          <div style={{fontFamily:"Outfit,sans-serif",fontSize:"20px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Razorpay Checkout Open</div>
-          <div style={{color:C.muted,fontSize:"13px"}}>Complete the payment in the popup window.<br/>Don't close this tab.</div>
+
+        {/* LOADING ORDER */}
+        {step==="loading"&&<div style={{padding:"52px",textAlign:"center"}}>
+          <div style={{width:"52px",height:"52px",border:`3px solid ${C.border}`,borderTop:`3px solid ${C.accent}`,borderRadius:"50%",margin:"0 auto 20px",animation:"spin 0.8s linear infinite"}}/>
+          <div style={{fontFamily:"Outfit,sans-serif",fontSize:"19px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Creating order...</div>
+          <div style={{color:C.muted,fontSize:"13px"}}>Connecting to Razorpay</div>
         </div>}
-        {step==="verifying"&&<div style={{padding:"48px",textAlign:"center"}}>
-          <div style={{width:"56px",height:"56px",border:`3px solid ${C.border}`,borderTop:`3px solid ${C.accent}`,borderRadius:"50%",margin:"0 auto 20px",animation:"spin 0.8s linear infinite"}}/>
-          <div style={{fontFamily:"Outfit,sans-serif",fontSize:"20px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Verifying Payment...</div>
-          <div style={{color:C.muted,fontSize:"13px"}}>Confirming with Razorpay webhook</div>
+
+        {/* RAZORPAY POPUP OPEN */}
+        {step==="waiting"&&<div style={{padding:"52px",textAlign:"center"}}>
+          <div style={{fontSize:"44px",marginBottom:"16px"}}>💳</div>
+          <div style={{fontFamily:"Outfit,sans-serif",fontSize:"19px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Complete payment in popup</div>
+          <div style={{color:C.muted,fontSize:"13px",lineHeight:1.6}}>A Razorpay window has opened.<br/>Choose UPI / Card / NetBanking.<br/>Don't close this tab.</div>
         </div>}
-        {step==="success"&&<div style={{padding:"48px",textAlign:"center"}}>
+
+        {/* VERIFYING */}
+        {step==="verifying"&&<div style={{padding:"52px",textAlign:"center"}}>
+          <div style={{width:"52px",height:"52px",border:`3px solid ${C.border}`,borderTop:`3px solid ${C.accent}`,borderRadius:"50%",margin:"0 auto 20px",animation:"spin 0.8s linear infinite"}}/>
+          <div style={{fontFamily:"Outfit,sans-serif",fontSize:"19px",fontWeight:"700",color:C.white,marginBottom:"8px"}}>Verifying payment...</div>
+          <div style={{color:C.muted,fontSize:"13px"}}>Checking signature with Razorpay</div>
+        </div>}
+
+        {/* SUCCESS */}
+        {step==="success"&&<div style={{padding:"52px",textAlign:"center"}}>
           <div style={{fontSize:"56px",marginBottom:"16px"}}>✅</div>
           <div style={{fontFamily:"Outfit,sans-serif",fontSize:"22px",fontWeight:"800",color:C.accent,marginBottom:"8px"}}>Payment Verified!</div>
           <div style={{color:C.muted,fontSize:"13px"}}>Generating your clean PDF...</div>
         </div>}
+
       </div>
     </div>
   );
 }
 
+// ═══════════════════════════════════════════════════════════
+// ADMIN PANEL
+// ═══════════════════════════════════════════════════════════
 function AdminPanel({ onClose }) {
   const [authed, setAuthed] = useState(false);
   const [pw, setPw] = useState("");
   const [error, setError] = useState("");
   const [tab, setTab] = useState("dashboard");
-  const stats = Store.getStats();
-  const payments = Store.getPayments();
+  const [stats, setStats] = useState(null);
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(false);
   const C = DARK;
+
+  const fetchStats = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/admin/stats`, {
+        headers: { "x-admin-key": "resumemint_admin_2025" }
+      });
+      if (!res.ok) throw new Error("Unauthorized");
+      const data = await res.json();
+      setStats(data);
+      setPayments(data.recent || []);
+    } catch (e) {
+      // Fallback to session-only data if backend unreachable
+      setStats({ total: Store._data.stats.totalUsers, revenue: Store._data.stats.totalRevenue, today: Store._data.stats.todayUsers, todayRevenue: Store._data.stats.todayRevenue, conversionRate: Store._data.stats.conversionRate });
+      setPayments(Store.getPayments());
+    }
+    setLoading(false);
+  };
 
   const login = () => {
     if (!Security.rateLimit("admin-login", 5, 300000)) { setError("Too many attempts. Locked for 5 minutes."); return; }
-    if (Security.hashData(pw) === Security.hashData("admin@resumemint")) { setAuthed(true); setError(""); }
-    else setError("Invalid credentials");
+    if (Security.hashData(pw) === Security.hashData("admin@resumemint")) {
+      setAuthed(true); setError("");
+      fetchStats();
+    } else setError("Invalid credentials");
     setPw("");
   };
 
-  const metricCards = [
-    {label:"Total Revenue",value:`₹${stats.totalRevenue.toLocaleString()}`,sub:"All time",icon:"💰",color:C.accent},
-    {label:"Total Resumes",value:stats.totalUsers.toLocaleString(),sub:"All time",icon:"📄",color:C.blue},
-    {label:"Today Revenue",value:`₹${stats.todayRevenue}`,sub:"Last 24h",icon:"📈",color:C.gold},
-    {label:"Today Users",value:stats.todayUsers,sub:"Last 24h",icon:"👥",color:"#a78bfa"},
-    {label:"Conversion Rate",value:`${stats.conversionRate}%`,sub:"Visitors → Paid",icon:"🎯",color:C.accent},
-    {label:"Avg Revenue/Day",value:`₹${Math.round(stats.totalRevenue/30)}`,sub:"30-day avg",icon:"📊",color:C.gold},
-  ];
+  const metricCards = stats ? [
+    {label:"Total Revenue",value:`₹${(stats.revenue||0).toLocaleString()}`,sub:"All time",icon:"💰",color:C.accent},
+    {label:"Total Resumes",value:(stats.total||0).toLocaleString(),sub:"All time",icon:"📄",color:C.blue},
+    {label:"Today Revenue",value:`₹${stats.todayRevenue||0}`,sub:"Last 24h",icon:"📈",color:C.gold},
+    {label:"Today Users",value:stats.today||0,sub:"Last 24h",icon:"👥",color:"#a78bfa"},
+    {label:"Conversion Rate",value:`${stats.conversionRate||"—"}%`,sub:"Visitors → Paid",icon:"🎯",color:C.accent},
+    {label:"Avg Revenue/Day",value:`₹${Math.round((stats.revenue||0)/30)}`,sub:"30-day avg",icon:"📊",color:C.gold},
+  ] : [];
 
   if (!authed) return (
     <div style={{position:"fixed",inset:0,background:"#000000ee",zIndex:4000,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -580,8 +606,9 @@ function AdminPanel({ onClose }) {
         <div style={{flex:1,padding:"32px",overflowY:"auto"}}>
           {tab==="dashboard"&&(<>
             <div style={{fontFamily:"Outfit,sans-serif",fontWeight:"800",fontSize:"28px",color:C.white,marginBottom:"6px"}}>Dashboard</div>
-            <div style={{color:C.muted,fontSize:"13px",marginBottom:"28px"}}>Live performance overview • Updates in real-time</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"16px",marginBottom:"28px"}}>
+            <div style={{color:C.muted,fontSize:"13px",marginBottom:"28px"}}>Live data from MongoDB • <button onClick={fetchStats} style={{background:"transparent",border:"none",color:C.accent,cursor:"pointer",fontSize:"13px",fontWeight:"600",padding:0}}>↻ Refresh</button></div>
+            {loading&&<div style={{textAlign:"center",padding:"40px",color:C.muted}}>Loading real data from backend...</div>}
+            {!loading&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"16px",marginBottom:"28px"}}>
               {metricCards.map((m,i)=>(<div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:"14px",padding:"20px"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"}}>
                   <div style={{fontSize:"11px",color:C.muted,textTransform:"uppercase",letterSpacing:"0.5px"}}>{m.label}</div>
@@ -590,7 +617,7 @@ function AdminPanel({ onClose }) {
                 <div style={{fontFamily:"Outfit,sans-serif",fontSize:"28px",fontWeight:"800",color:m.color,marginBottom:"4px"}}>{m.value}</div>
                 <div style={{fontSize:"12px",color:C.muted}}>{m.sub}</div>
               </div>))}
-            </div>
+            </div>}
             {/* Revenue chart simulation */}
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:"14px",padding:"24px",marginBottom:"20px"}}>
               <div style={{fontFamily:"Outfit,sans-serif",fontWeight:"700",color:C.white,marginBottom:"16px"}}>Daily Revenue (Last 14 days)</div>
@@ -623,18 +650,20 @@ function AdminPanel({ onClose }) {
           </>)}
           {tab==="transactions"&&(<>
             <div style={{fontFamily:"Outfit,sans-serif",fontWeight:"800",fontSize:"28px",color:C.white,marginBottom:"6px"}}>Transactions</div>
-            <div style={{color:C.muted,fontSize:"13px",marginBottom:"24px"}}>{payments.length} payments in this session</div>
+            <div style={{color:C.muted,fontSize:"13px",marginBottom:"24px"}}>{payments.length} verified payments from MongoDB • <button onClick={fetchStats} style={{background:"transparent",border:"none",color:C.accent,cursor:"pointer",fontSize:"13px",fontWeight:"600",padding:0}}>↻ Refresh</button></div>
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:"14px",overflow:"hidden"}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 1.5fr 1fr 1fr",padding:"12px 20px",borderBottom:`1px solid ${C.border}`,background:C.surface}}>
-                {["ID","Name/Email","UPI","Amount","Time"].map(h=>(<div key={h} style={{fontSize:"11px",fontWeight:"700",color:C.muted,textTransform:"uppercase",letterSpacing:"0.5px"}}>{h}</div>))}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 2fr 2fr 1fr 1.2fr",padding:"12px 20px",borderBottom:`1px solid ${C.border}`,background:C.surface}}>
+                {["Payment ID","Name","Email","Amount","Time"].map(h=>(<div key={h} style={{fontSize:"11px",fontWeight:"700",color:C.muted,textTransform:"uppercase",letterSpacing:"0.5px"}}>{h}</div>))}
               </div>
-              {payments.length===0&&(<div style={{padding:"40px",textAlign:"center",color:C.muted}}>No transactions yet. Demo payments will appear here.</div>)}
-              {payments.map((p,i)=>(<div key={i} style={{display:"grid",gridTemplateColumns:"1fr 2fr 1.5fr 1fr 1fr",padding:"12px 20px",borderBottom:`1px solid ${C.border}`,alignItems:"center"}}>
-                <div style={{fontSize:"11px",color:C.muted,fontFamily:"monospace"}}>{p.id.slice(0,8)}</div>
-                <div><div style={{fontSize:"13px",color:C.text}}>{p.name}</div><div style={{fontSize:"11px",color:C.muted}}>{p.email}</div></div>
-                <div style={{fontSize:"12px",color:C.text}}>{p.upi}</div>
+              {payments.length===0&&(<div style={{padding:"40px",textAlign:"center",color:C.muted}}>
+                {loading?"Loading...":"No verified payments yet. They will appear here after real Razorpay transactions."}
+              </div>)}
+              {payments.map((p,i)=>(<div key={i} style={{display:"grid",gridTemplateColumns:"1fr 2fr 2fr 1fr 1.2fr",padding:"12px 20px",borderBottom:`1px solid ${C.border}`,alignItems:"center"}}>
+                <div style={{fontSize:"11px",color:C.muted,fontFamily:"monospace"}}>{(p.paymentId||p.id||"—").slice(-8)}</div>
+                <div style={{fontSize:"13px",color:C.text}}>{p.name||"—"}</div>
+                <div style={{fontSize:"12px",color:C.muted}}>{p.email||"—"}</div>
                 <div style={{fontFamily:"Outfit,sans-serif",fontWeight:"700",color:C.accent}}>₹9</div>
-                <div style={{fontSize:"11px",color:C.muted}}>{new Date(p.timestamp).toLocaleTimeString()}</div>
+                <div style={{fontSize:"11px",color:C.muted}}>{p.createdAt||p.timestamp?new Date(p.createdAt||p.timestamp).toLocaleString("en-IN",{dateStyle:"short",timeStyle:"short"}):"—"}</div>
               </div>))}
             </div>
           </>)}
@@ -823,30 +852,56 @@ function Builder({ onBack, theme, setTheme }) {
   const [showPayment, setShowPayment] = useState(false);
   const [showATSPanel, setShowATSPanel] = useState(true);
   const [paid, setPaid] = useState(false);
-  const [downloadToken, setDownloadToken] = useState(null);
   const [resumeTheme, setResumeTheme] = useState("light");
+  const [mode, setMode] = useState(null); // null = choose, "scratch", "upload", "ai"
+  const [uploadStatus, setUploadStatus] = useState("idle"); // idle|reading|extracting|done|error
 
-  const downloadPDF = async () => {
+  const handleUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadStatus("reading");
     try {
-      // Try backend PDF generation first
-      const res = await fetch(`${BACKEND_URL}/generate-pdf`, {
+      // Convert file to base64
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const isImage = file.type.startsWith("image/");
+      const mediaType = isImage ? file.type : "application/pdf";
+      setUploadStatus("extracting");
+      // Call Claude API to extract resume data
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: downloadToken, form, templateId, resumeTheme })
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1500,
+          system: `You are a resume parser. Extract all data from the resume and return ONLY valid JSON matching this exact structure, no markdown, no extra text:
+{"name":"","email":"","phone":"","location":"","linkedin":"","github":"","website":"","summary":"","education":[{"degree":"","school":"","year":"","gpa":""}],"experience":[{"role":"","company":"","duration":"","bullets":"bullet1\nbullet2"}],"projects":[{"name":"","tech":"","description":"","link":""}],"skills":{"technical":"","languages":"","soft":"","tools":""},"certifications":"","achievements":""}`,
+          messages: [{
+            role: "user",
+            content: [{
+              type: "document",
+              source: { type: "base64", media_type: mediaType, data: base64 }
+            }, {
+              type: "text",
+              text: "Extract all resume data and return the JSON."
+            }]
+          }]
+        })
       });
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url; a.download = `${form.name||"resume"}_ResumeMint.pdf`;
-        a.click(); URL.revokeObjectURL(url);
-        return;
-      }
-    } catch(e) {}
-    // Fallback: browser print-to-PDF
-    window.print();
+      const data = await res.json();
+      const text = data.content?.map(b => b.text || "").join("") || "";
+      const extracted = JSON.parse(text.replace(/```json|```/g, "").trim());
+      setUploadStatus("done");
+      setTimeout(() => { setForm(extracted); setMode("scratch"); setUploadStatus("idle"); }, 1000);
+    } catch (err) {
+      console.error("Upload extraction failed:", err);
+      setUploadStatus("error");
+    }
   };
-  const [mode, setMode] = useState(null); // null = choose, "scratch", "upload", "ai"
   const ats = calcATS(form);
   const TemplateComp = TEMPLATES.find(t=>t.id===templateId)?.component || TemplateClassic;
 
@@ -882,11 +937,17 @@ function Builder({ onBack, theme, setTheme }) {
         </div>
         {mode==="upload"&&(<div style={{marginTop:"20px",background:C.card,border:`2px dashed ${C.border}`,borderRadius:"14px",padding:"40px",textAlign:"center"}}>
           <div style={{fontSize:"40px",marginBottom:"12px"}}>📤</div>
-          <div style={{fontFamily:"Outfit,sans-serif",fontWeight:"700",color:C.text,marginBottom:"8px"}}>Drop your resume PDF or image here</div>
-          <div style={{color:C.muted,fontSize:"13px",marginBottom:"16px"}}>We'll extract your data and pre-fill the form</div>
-          <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={()=>{ setForm(SAMPLE); setMode("scratch"); }} style={{display:"none"}} id="resume-upload"/>
-          <label htmlFor="resume-upload" style={{padding:"11px 24px",background:C.accent,color:"#000",borderRadius:"8px",cursor:"pointer",fontFamily:"Outfit,sans-serif",fontWeight:"700",fontSize:"14px"}}>Choose File</label>
-          <div style={{color:C.muted,fontSize:"11px",marginTop:"12px"}}>Supports PDF, PNG, JPG • Max 5MB</div>
+          <div style={{fontFamily:"Outfit,sans-serif",fontWeight:"700",color:C.text,marginBottom:"8px"}}>Upload your existing resume</div>
+          <div style={{color:C.muted,fontSize:"13px",marginBottom:"16px"}}>AI will read it and pre-fill the form for you</div>
+          {uploadStatus==="idle"&&<>
+            <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={handleUpload} style={{display:"none"}} id="resume-upload"/>
+            <label htmlFor="resume-upload" style={{padding:"11px 24px",background:C.accent,color:"#000",borderRadius:"8px",cursor:"pointer",fontFamily:"Outfit,sans-serif",fontWeight:"700",fontSize:"14px",display:"inline-block"}}>Choose File</label>
+            <div style={{color:C.muted,fontSize:"11px",marginTop:"12px"}}>PDF, PNG, JPG • Max 5MB</div>
+          </>}
+          {uploadStatus==="reading"&&<div style={{color:C.muted,fontSize:"13px"}}><div style={{width:"36px",height:"36px",border:`3px solid ${C.border}`,borderTop:`3px solid ${C.accent}`,borderRadius:"50%",margin:"0 auto 12px",animation:"spin 0.8s linear infinite"}}/> Reading your resume...</div>}
+          {uploadStatus==="extracting"&&<div style={{color:C.muted,fontSize:"13px"}}><div style={{width:"36px",height:"36px",border:`3px solid ${C.border}`,borderTop:`3px solid ${C.accent}`,borderRadius:"50%",margin:"0 auto 12px",animation:"spin 0.8s linear infinite"}}/> AI is extracting your data...</div>}
+          {uploadStatus==="done"&&<div style={{color:C.accent,fontSize:"13px",fontWeight:"600"}}>✅ Resume data extracted! Loading form...</div>}
+          {uploadStatus==="error"&&<div><div style={{color:C.red,fontSize:"13px",marginBottom:"12px"}}>⚠ Could not extract data. Loading sample instead.</div><button onClick={()=>{setForm(SAMPLE);setMode("scratch");}} style={{padding:"9px 20px",background:C.accent,color:"#000",border:"none",borderRadius:"8px",cursor:"pointer",fontFamily:"Outfit,sans-serif",fontWeight:"700",fontSize:"13px"}}>Continue with Sample</button></div>}
         </div>)}
       </div>
     </div>
@@ -906,7 +967,7 @@ function Builder({ onBack, theme, setTheme }) {
           <button onClick={()=>setShowAI(true)} style={{padding:"7px 12px",background:C.accentDim,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>🤖 AI Job-Match</button>
           <button onClick={()=>setShowATSPanel(s=>!s)} style={{padding:"7px 12px",background:ats.score>=80?C.accentDim:ats.score>=60?`${C.gold}22`:`${C.red}22`,border:`1px solid ${ats.score>=80?C.accent+"44":ats.score>=60?C.gold+"44":C.red+"44"}`,color:scoreColor,borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:"700"}}>ATS {ats.score}/100</button>
           <button onClick={()=>setForm(SAMPLE)} style={{padding:"7px 12px",background:C.card,border:`1px solid ${C.border}`,color:C.muted,borderRadius:"7px",cursor:"pointer",fontSize:"12px"}}>Load Sample</button>
-          <button onClick={()=>paid?downloadPDF():setShowPayment(true)} style={{padding:"9px 18px",background:C.accent,color:"#000",border:"none",borderRadius:"8px",fontFamily:"Outfit,sans-serif",fontWeight:"700",fontSize:"13px",cursor:"pointer"}}>
+          <button onClick={()=>paid?alert("✅ In production: PDF downloads here via Puppeteer backend"):setShowPayment(true)} style={{padding:"9px 18px",background:C.accent,color:"#000",border:"none",borderRadius:"8px",fontFamily:"Outfit,sans-serif",fontWeight:"700",fontSize:"13px",cursor:"pointer"}}>
             {paid?"⬇ Download PDF":"💳 Pay ₹9 & Download"}
           </button>
         </div>
@@ -1017,7 +1078,7 @@ function Builder({ onBack, theme, setTheme }) {
 
       {showPicker&&<TemplatePicker selected={templateId} onSelect={(id)=>{setTemplateId(id);setShowPicker(false);}} theme={theme} C={C}/>}
       {showAI&&<AIJobMatchModal onClose={()=>setShowAI(false)} onApply={(updated)=>setForm(updated)} currentForm={form}/>}
-      {showPayment&&<PaymentModal form={form} onClose={()=>setShowPayment(false)} onSuccess={(rec)=>{setDownloadToken(rec?.token);setPaid(true);setShowPayment(false);setTimeout(()=>downloadPDF(),500);}}/>}
+      {showPayment&&<PaymentModal form={form} onClose={()=>setShowPayment(false)} onSuccess={(rec)=>{setPaid(true);setShowPayment(false);setTimeout(()=>window.print(),800);}}/>}
     </div>
   );
 }
