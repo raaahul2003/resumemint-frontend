@@ -89,6 +89,7 @@ const EMPTY={
   projects:[{name:"",tech:"",description:"",link:""}],
   skills:{technical:"",languages:"",soft:"",tools:""},
   certifications:"",achievements:"",
+  customSection:{title:"",content:""},
 };
 const SAMPLE={
   name:"Arjun Sharma",email:"arjun.sharma@gmail.com",phone:"+91 98765 43210",
@@ -101,6 +102,7 @@ const SAMPLE={
     {name:"Smart Attendance System",tech:"Python, OpenCV, Flask, MySQL",description:"Face recognition attendance for college. 95% accuracy. Used by 3 departments with 400+ students.",link:"github.com/arjunsharma"},
   ],
   skills:{technical:"React.js, Node.js, Express, MongoDB, MySQL, REST APIs, Git, Docker, AWS EC2/S3",languages:"JavaScript, Python, Java, C++, SQL",soft:"Problem Solving, Team Leadership, Communication, Time Management",tools:"VS Code, Postman, Figma, Jira, Linux"},
+  customSection:{title:"",content:""},
   certifications:"AWS Certified Cloud Practitioner — Amazon (2024)\nGoogle Data Analytics Professional Certificate (2023)\nHackerRank Gold Badge — Problem Solving",
   achievements:"Academic Rank 3 in Dept. (2023)\nWinner — Internal Hackathon 2024\nGoogle DSC Lead — RVCE Chapter",
 };
@@ -119,7 +121,7 @@ function Watermark(){
 
 // ── TEMPLATES ─────────────────────────────────────────────
 function TemplateClassic({form,watermark,theme}){
-  const T=theme==="dark"?{bg:"#1a1a2e",text:"#e2e2f0",head:"#00e5a0",sub:"#9090b0",line:"#2a2a40",name:"#ffffff"}:{bg:"#ffffff",text:"#1a1a2e",head:"#0ea96e",sub:"#64748b",line:"#e2e8f0",name:"#0a0a1a"};
+  const T={bg:"#ffffff",text:"#111111",head:"#111111",sub:"#444444",line:"#cccccc",name:"#000000"};
   const s={wrap:{fontFamily:"Georgia,serif",fontSize:"11px",color:T.text,background:T.bg,padding:"36px 40px",lineHeight:1.6,maxWidth:"700px",margin:"0 auto",position:"relative"},name:{fontSize:"26px",fontWeight:"700",color:T.name,letterSpacing:"1px",marginBottom:"6px"},contact:{fontSize:"10px",color:T.sub,display:"flex",gap:"14px",flexWrap:"wrap",marginBottom:"4px"},divider:{borderTop:`2px solid ${T.head}`,margin:"10px 0 8px"},thin:{borderTop:`1px solid ${T.line}`,margin:"5px 0"},sh:{fontSize:"12px",fontWeight:"700",color:T.head,textTransform:"uppercase",letterSpacing:"1.5px",marginBottom:"5px"},row:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"},label:{color:T.sub,fontSize:"10px"},ul:{marginLeft:"14px",listStyleType:"disc"}};
   return(<div style={{position:"relative"}}>{watermark&&<Watermark/>}<div style={s.wrap}>
     <div style={s.name}>{form.name||"Your Name"}</div>
@@ -130,8 +132,8 @@ function TemplateClassic({form,watermark,theme}){
     {form.experience?.[0]?.role&&<><div style={s.sh}>Work Experience</div><div style={s.thin}/>{form.experience.map((e,i)=>(<div key={i} style={{marginBottom:"10px"}}><div style={s.row}><strong style={{fontSize:"12px"}}>{e.role}{e.company&&` — ${e.company}`}</strong><span style={s.label}>{e.duration}</span></div><ul style={s.ul}>{e.bullets?.split("\n").filter(Boolean).map((b,j)=><li key={j} style={{marginBottom:"2px"}}>{b}</li>)}</ul></div>))}</>}
     {form.projects?.[0]?.name&&<><div style={s.sh}>Projects</div><div style={s.thin}/>{form.projects.map((p,i)=>(<div key={i} style={{marginBottom:"8px"}}><div style={s.row}><strong style={{fontSize:"12px"}}>{p.name}</strong>{p.link&&<span style={s.label}>{p.link}</span>}</div>{p.tech&&<div style={{...s.label,fontStyle:"italic",marginBottom:"2px"}}>{p.tech}</div>}<div style={{fontSize:"11px"}}>{p.description}</div></div>))}</>}
     {(form.skills?.technical||form.skills?.languages)&&<><div style={s.sh}>Technical Skills</div><div style={s.thin}/>{form.skills?.technical&&<div style={{marginBottom:"3px"}}><strong>Core: </strong>{form.skills.technical}</div>}{form.skills?.languages&&<div style={{marginBottom:"3px"}}><strong>Languages: </strong>{form.skills.languages}</div>}{form.skills?.tools&&<div><strong>Tools: </strong>{form.skills.tools}</div>}</>}
-    {form.certifications&&<><div style={{fontSize:"12px",fontWeight:"700",color:T.head,textTransform:"uppercase",letterSpacing:"1.5px",marginTop:"8px",marginBottom:"5px"}}>Certifications</div><div style={s.thin}/><ul style={s.ul}>{form.certifications.split("\n").filter(Boolean).map((c,i)=><li key={i}>{c}</li>)}</ul></>}
-    {form.achievements&&<><div style={{fontSize:"12px",fontWeight:"700",color:T.head,textTransform:"uppercase",letterSpacing:"1.5px",marginTop:"8px",marginBottom:"5px"}}>Achievements</div><div style={s.thin}/><ul style={s.ul}>{form.achievements.split("\n").filter(Boolean).map((a,i)=><li key={i}>{a}</li>)}</ul></>}
+    {form.certifications&&<><div style={{fontSize:"12px",fontWeight:"700",color:"#111111",textTransform:"uppercase",letterSpacing:"1.5px",marginTop:"8px",marginBottom:"5px"}}>Certifications</div><div style={s.thin}/><ul style={s.ul}>{form.certifications.split("\n").filter(Boolean).map((c,i)=><li key={i}>{c}</li>)}</ul></>}
+    {form.achievements&&<><div style={{fontSize:"12px",fontWeight:"700",color:"#111111",textTransform:"uppercase",letterSpacing:"1.5px",marginTop:"8px",marginBottom:"5px"}}>Achievements</div><div style={s.thin}/><ul style={s.ul}>{form.achievements.split("\n").filter(Boolean).map((a,i)=><li key={i}>{a}</li>)}</ul></>}
   </div></div>);
 }
 
@@ -293,7 +295,7 @@ function AIModal({onClose,onApply,currentForm}){
       const parsed=JSON.parse(clean);
       setResult(parsed);
     }catch(e){
-      setErr("AI analysis failed: "+e.message+". Make sure ANTHROPIC_API_KEY is set in Railway env vars.");
+      setErr("AI analysis failed: "+e.message+". Make sure ANTHROPIC_API_KEY is set in Render env vars.");
     }
     setLoading(false);
   };
@@ -466,7 +468,7 @@ function AdminPanel({onClose}){
         {err&&<div style={{color:C.red,fontSize:"12px",marginBottom:"10px",padding:"7px",background:`${C.red}15`,borderRadius:"6px"}}>🚫 {err}</div>}
         <button onClick={login} style={{width:"100%",padding:"12px",background:C.accent,color:"#000",border:"none",borderRadius:"10px",fontFamily:"Outfit,sans-serif",fontWeight:"700",fontSize:"14px",cursor:"pointer"}}>Login</button>
         <button onClick={onClose} style={{width:"100%",marginTop:"6px",padding:"9px",background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:"12px"}}>Cancel</button>
-        <div style={{textAlign:"center",color:C.muted,fontSize:"11px",marginTop:"10px"}}>Password: admin@resumemint</div>
+        
       </div>
     </div>
   );
@@ -595,7 +597,7 @@ function Landing({onStart,onStartUpload,theme,setTheme,onAdmin}){
         </div>
         <h1 style={{fontFamily:"Outfit,sans-serif",fontWeight:"900",fontSize:"clamp(34px,6vw,68px)",lineHeight:1.1,marginBottom:"18px",color:C.text}}>
           Stop Getting Rejected.<br/>
-          <span style={{background:`linear-gradient(90deg,${C.accent},${C.gold})`,backgroundClip:"text",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Start Getting Hired.</span>
+          <span style={{background:`linear-gradient(90deg,${C.accent},${C.gold})`,backgroundClip:"text",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",color:"transparent"}}>Start Getting Hired.</span>
         </h1>
         <p style={{fontSize:"17px",color:C.muted,maxWidth:"540px",marginBottom:"32px",lineHeight:1.75}}>ATS-optimised resume builder with <strong style={{color:C.text}}>AI job-matching</strong>, 3 professional templates & live score checker. Built for Indian placements. <strong style={{color:C.text}}>₹9 flat.</strong></p>
         <div style={{display:"flex",gap:"10px",flexWrap:"wrap",marginBottom:"48px"}}>
@@ -718,24 +720,7 @@ function Builder({onBack,theme,setTheme,initialForm}){
         </div>
       </nav>
 
-      {/* ATS BAR */}
-      <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"10px 16px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:"14px",flexWrap:"wrap"}}>
-          <div style={{textAlign:"center",minWidth:"52px"}}>
-            <div style={{fontFamily:"Outfit,sans-serif",fontSize:"24px",fontWeight:"900",color:scoreColor}}>{ats.score}</div>
-            <div style={{fontSize:"9px",color:C.muted}}>ATS</div>
-          </div>
-          <div style={{flex:1,minWidth:"200px"}}>
-            <div style={{height:"6px",background:C.border,borderRadius:"4px",overflow:"hidden",marginBottom:"6px"}}>
-              <div style={{width:`${ats.score}%`,height:"100%",background:`linear-gradient(90deg,${C.red},${C.gold} 50%,${C.accent})`,transition:"width 0.5s ease",borderRadius:"4px"}}/>
-            </div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:"4px"}}>
-              {ats.issues.slice(0,4).map((issue,i)=><span key={i} style={{fontSize:"10px",padding:"1px 6px",background:`${C.red}18`,color:C.red,borderRadius:"4px"}}>⚠ {issue}</span>)}
-              {ats.passes.slice(0,3).map((p,i)=><span key={i} style={{fontSize:"10px",padding:"1px 6px",background:`${C.accent}18`,color:C.accent,borderRadius:"4px"}}>{p}</span>)}
-            </div>
-          </div>
-        </div>
-      </div>
+
 
       {/* MAIN LAYOUT */}
       <div style={{display:"flex",flex:1,overflow:"hidden"}} className="builder-layout">
@@ -744,7 +729,7 @@ function Builder({onBack,theme,setTheme,initialForm}){
           <div style={{padding:"14px 16px"}}>
             {/* Tabs */}
             <div style={{display:"flex",gap:"4px",marginBottom:"14px",overflowX:"auto",paddingBottom:"2px"}}>
-              {[["👤","personal"],["🎓","education"],["💼","experience"],["🚀","projects"],["🛠","skills"]].map(([icon,id])=>(
+              {[["👤","personal"],["🎓","education"],["💼","experience"],["🚀","projects"],["🛠","skills"],["➕","extra"]].map(([icon,id])=>(
                 <button key={id} onClick={()=>setTab(id)} style={{padding:"6px 11px",borderRadius:"7px",border:"none",cursor:"pointer",fontSize:"12px",fontFamily:"Outfit,sans-serif",fontWeight:"600",background:tab===id?C.accent:C.card,color:tab===id?"#000":C.muted,flexShrink:0,textTransform:"capitalize",transition:"all 0.15s"}}>
                   {icon} {id}
                 </button>
@@ -814,6 +799,15 @@ function Builder({onBack,theme,setTheme,initialForm}){
               <label style={lbl}>Achievements / Extra Curriculars</label>
               <textarea style={{...inp,height:"55px",resize:"vertical"}} placeholder={"Winner — Internal Hackathon 2024\nGoogle DSC Lead"} value={form.achievements} onChange={e=>upd("achievements",e.target.value)}/>
             </div>}
+
+            {tab==="extra"&&<div style={crd}>
+              <div style={{fontFamily:"Outfit,sans-serif",fontWeight:"700",color:C.text,marginBottom:"4px",fontSize:"14px"}}>Custom Section</div>
+              <div style={{color:C.muted,fontSize:"11px",marginBottom:"12px"}}>Add any extra section — Volunteer Work, Languages, Publications, Hobbies, etc.</div>
+              <label style={lbl}>Section Title</label>
+              <input style={inp} placeholder="e.g. Volunteer Work / Languages / Publications" value={form.customSection?.title||""} onChange={e=>setForm(p=>({...p,customSection:{...p.customSection,title:e.target.value}}))}/>
+              <label style={lbl}>Content (one item per line)</label>
+              <textarea style={{...inp,height:"120px",resize:"vertical"}} placeholder={"Volunteer Teacher — Teach For India (2023)\nSpoke at GDG DevFest Bangalore\nFluent in English, Hindi, Kannada"} value={form.customSection?.content||""} onChange={e=>setForm(p=>({...p,customSection:{...p.customSection,content:e.target.value}}))}/>
+            </div>}
           </div>
         </div>
 
@@ -822,7 +816,7 @@ function Builder({onBack,theme,setTheme,initialForm}){
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px",flexWrap:"wrap",gap:"6px"}}>
             <div style={{fontFamily:"Outfit,sans-serif",fontWeight:"700",color:C.text,fontSize:"12px"}}>Live Preview — {TEMPLATES.find(t=>t.id===templateId)?.name}</div>
             <div style={{display:"flex",gap:"5px",alignItems:"center"}}>
-              <span style={{fontSize:"10px",padding:"2px 7px",background:C.accentDim,color:C.accent,borderRadius:"4px",fontWeight:"700"}}>ATS {ats.score}/100</span>
+              
               {paid?<span style={{fontSize:"10px",color:C.accent}}>✅ Unlocked</span>:<span style={{fontSize:"10px",color:C.muted}}>🔒 Preview</span>}
             </div>
           </div>
