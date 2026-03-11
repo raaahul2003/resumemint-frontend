@@ -208,7 +208,7 @@ function PaymentModal({onClose,onSuccess,form}){
       const order=await r.json();
       if(!window.Razorpay)throw new Error("Razorpay script not loaded");
       const rzp=new window.Razorpay({
-        key:"rzp_test_SPK3M2HkvjRH0C",
+        key:"rzp_live_SPxfWRaOw9vYcS",
         amount:900,currency:"INR",
         name:"ResumeMint",description:"ATS Resume — ₹9",
         order_id:order.id,
