@@ -1,8 +1,9 @@
 // ResumeMint v4 — All features working, fully responsive, dark/light fixed
 import { useState, useEffect } from "react";
 
-// ── BACKEND URL ───────────────────────────────────────────
-const HARDCODED_BACKEND = "https://resumemint-backend-production.up.railway.app";
+// ── BACKEND URL (set via config or hardcode your Railway URL here) ────────
+// PASTE YOUR RAILWAY URL BELOW — e.g. https://yourapp.up.railway.app
+const HARDCODED_BACKEND = "https://resumemint-backend.onrender.com";  // <-- PUT YOUR URL HERE if you know it
 
 const getB = () => {
   if (HARDCODED_BACKEND) return HARDCODED_BACKEND;
@@ -843,6 +844,45 @@ function Builder({onBack,theme,setTheme,initialForm}){
   );
 }
 
+// ── BACKEND CONFIG BANNER ─────────────────────────────────
+function BackendBanner(){
+  const [url,setUrl]=useState(()=>{try{return localStorage.getItem("rm_backend")||"";}catch{return "";}});
+  const [saved,setSaved]=useState(false);
+  const save=()=>{
+    const clean=url.trim().replace(/\/$/,"");
+    try{localStorage.setItem("rm_backend",clean);}catch{}
+    setSaved(true);
+    setTimeout(()=>window.location.reload(),800);
+  };
+  const cur=getB();
+  if(cur)return null; // backend set, hide banner
+  return(
+    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:9999,background:"#1a0a00",border:"2px solid #f5c842",borderBottom:"none",padding:"14px 20px"}}>
+      <div style={{maxWidth:"700px",margin:"0 auto"}}>
+        <div style={{fontFamily:"Outfit,sans-serif",fontWeight:"700",color:"#f5c842",marginBottom:"6px",fontSize:"14px"}}>
+          ⚠️ Backend not connected — payment, AI & admin won't work
+        </div>
+        <div style={{color:"#aaa",fontSize:"12px",marginBottom:"10px"}}>
+          Go to Railway → your backend service → Settings → Networking → Generate Domain<br/>
+          Then paste the URL below (e.g. <code style={{color:"#f5c842"}}>https://resumemint-backend-production.up.railway.app</code>)
+        </div>
+        <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+          <input
+            value={url}
+            onChange={e=>setUrl(e.target.value)}
+            placeholder="https://your-backend.up.railway.app"
+            style={{flex:1,minWidth:"280px",padding:"9px 12px",background:"#0a0a0a",border:"1px solid #f5c842",borderRadius:"8px",color:"#fff",fontSize:"13px",outline:"none",fontFamily:"monospace"}}
+            onKeyDown={e=>e.key==="Enter"&&save()}
+          />
+          <button onClick={save} style={{padding:"9px 20px",background:"#f5c842",color:"#000",border:"none",borderRadius:"8px",fontFamily:"Outfit,sans-serif",fontWeight:"700",fontSize:"13px",cursor:"pointer"}}>
+            {saved?"✅ Saved! Reloading...":"Save & Connect"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── ROOT ──────────────────────────────────────────────────
 export default function App(){
   const [page,setPage]=useState("landing");
@@ -853,6 +893,7 @@ export default function App(){
 
   return(<>
     <style>{GS}</style>
+    <BackendBanner/>
     {page==="landing"&&<Landing
       onStart={()=>{setUploadedForm(null);setPage("builder");}}
       onStartUpload={()=>setShowUpload(true)}
