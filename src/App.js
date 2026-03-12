@@ -262,6 +262,8 @@ function PaymentModal({onClose,onSuccess,form}){
     if(!Security.rateLimit("pay",3,300000)){setErr("Too many attempts. Wait 5 min.");return;}
     setStep("loading");setErr("");
     try{
+      // Wake up Render free tier first
+      try{await fetch(`${getB()}/`);}catch(e){}
       const r=await fetch(`${getB()}/create-order`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount:900})});
       if(!r.ok)throw new Error("Backend error "+r.status);
       const order=await r.json();
@@ -285,7 +287,11 @@ function PaymentModal({onClose,onSuccess,form}){
         }
       });
       rzp.open();setStep("open");
-    }catch(e){setErr(e.message||"Cannot connect. Check internet.");setStep("error");}
+    }catch(e){
+    const msg=e.message||String(e)||"Unknown error";
+    setErr(msg.includes("400")||msg.includes("order")?"Backend error — try refreshing the page. If issue persists, backend may be waking up (wait 30s and retry).":msg);
+    setStep("error");
+  }
   };
 
   return(
@@ -333,7 +339,10 @@ function AIModal({onClose,onApply,currentForm}){
   const analyze=async()=>{
     if(jd.trim().length<50){setErr("Please paste a job description (min 50 characters)");return;}
     if(!Security.rateLimit("ai",3,60000)){setErr("Too many requests. Wait 1 minute.");return;}
-    setLoading(true);setErr("");
+    setLoading(true);setErr("Waking up AI server...");
+    // Wake up Render free tier (can be sleeping)
+    try{await fetch(`${getB()}/`);}catch(e){}
+    setErr("");
     try{
       const res=await fetch(`${getB()}/ai-job-match`,{
         method:"POST",headers:{"Content-Type":"application/json"},
@@ -345,11 +354,11 @@ function AIModal({onClose,onApply,currentForm}){
       });
       if(!res.ok)throw new Error("Backend error "+res.status);
       const data=await res.json();
-      if(data.error)throw new Error(data.error);
+      if(data.error)throw new Error(typeof data.error==="string"?data.error:JSON.stringify(data.error));
       const text=data.content?.map(b=>b.text||"").join("")||"";
       const parsed=JSON.parse(text.replace(/```json|```/g,"").trim());
       setResult(parsed);
-    }catch(e){setErr("AI failed: "+e.message);}
+    }catch(e){setErr("AI failed: "+(e.message||String(e)));}
     setLoading(false);
   };
 
@@ -414,7 +423,7 @@ function UploadModal({onClose,onExtracted}){
       });
       if(!resp.ok)throw new Error("Backend error "+resp.status);
       const data=await resp.json();
-      if(data.error)throw new Error(data.error);
+      if(data.error)throw new Error(typeof data.error==="string"?data.error:JSON.stringify(data.error));
       const text=data.content?.map(b=>b.text||"").join("")||"";
       const clean=text.replace(/```json|```/g,"").trim();
       const extracted=JSON.parse(clean);
@@ -422,7 +431,7 @@ function UploadModal({onClose,onExtracted}){
       setStatus("done");
       setTimeout(()=>{onExtracted(extracted);onClose();},700);
     }catch(e){
-      setErrMsg("Could not extract: "+e.message);
+      setErrMsg("Could not extract: "+(e.message||String(e)));
       setStatus("error");
     }
   };
@@ -584,7 +593,7 @@ function Landing({onStart,onStartUpload,theme,setTheme,onAdmin}){
         </div>
         <h1 style={{fontFamily:"Outfit,sans-serif",fontWeight:"900",fontSize:"clamp(34px,6vw,68px)",lineHeight:1.1,marginBottom:"18px",color:C.text}}>
           Stop Getting Rejected.<br/>
-          <span style={{background:`linear-gradient(90deg,${C.accent},${C.gold})`,backgroundClip:"text",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Start Getting Hired.</span>
+          <span style={{background:`linear-gradient(90deg,${C.accent},${C.gold})`,backgroundClip:"text",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",display:"inline-block"}}>Start Getting Hired.</span>
         </h1>
         <p style={{fontSize:"17px",color:C.muted,maxWidth:"540px",marginBottom:"32px",lineHeight:1.75}}>ATS-optimised resume builder with <strong style={{color:C.text}}>AI job-matching</strong>, 3 professional templates. Built for Indian placements. <strong style={{color:C.text}}>₹9 flat.</strong></p>
         <div style={{display:"flex",gap:"10px",flexWrap:"wrap",marginBottom:"48px"}}>
@@ -897,4 +906,3 @@ export default function App(){
     />}
   </>);
 }
-        
