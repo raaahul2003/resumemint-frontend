@@ -57,6 +57,11 @@ input,textarea,select,button{font-family:'Outfit',sans-serif;}
 .rm-inp{transition:border-color .15s;}
 
 /* Mobile */
+/* Desktop: always show both panels */
+@media(min-width:769px){
+  .rm-formpanel{display:flex!important;}
+  #rm-preview-panel{display:flex!important;}
+}
 @media(max-width:768px){
   .rm-stats{grid-template-columns:repeat(2,1fr);}
   .rm-feats{grid-template-columns:1fr 1fr;}
@@ -75,12 +80,7 @@ input,textarea,select,button{font-family:'Outfit',sans-serif;}
   .rm-steps{grid-template-columns:1fr;}
 }
 
-/* Print */
-@media print{
-  body>*{display:none!important;}
-  #rm-print-target{display:block!important;position:fixed;inset:0;z-index:9999;background:#fff;}
-  @page{margin:0;size:A4;}
-}
+/* Print — handled dynamically via JS style injection */
 #rm-print-target{display:none;}
 `;
 
@@ -271,29 +271,8 @@ const TEMPLATES = [
 // ══════════════════════════════════════════════════════════
 // PDF DOWNLOAD — proper print isolation
 // ══════════════════════════════════════════════════════════
-function downloadPDF(form, tplId) {
-  const container = document.getElementById("rm-print-target");
-  if (!container) return;
-
-  // Render resume HTML into print target
-  const TplMap = { classic: TemplateClassic, modern: TemplateModern, executive: TemplateExecutive };
-  const Tmpl = TplMap[tplId] || TemplateClassic;
-
-  // We need react to render into it — use a portal approach
-  // Simpler: clone the preview node
-  const preview = document.getElementById("rm-preview-inner");
-  if (preview) {
-    container.innerHTML = preview.innerHTML;
-    container.style.display = "block";
-    setTimeout(() => {
-      window.print();
-      setTimeout(() => {
-        container.style.display = "none";
-        container.innerHTML = "";
-      }, 1000);
-    }, 200);
-  }
-}
+// No-op placeholder — actual download is triggerDownload() in Builder
+function downloadPDF() {}
 
 // ══════════════════════════════════════════════════════════
 // PAYMENT MODAL
@@ -966,19 +945,85 @@ function Builder({ onBack, initialForm }) {
   const delC = (i) => setForm(p => ({ ...p, customSections: p.customSections.filter((_, j) => j !== i) }));
 
   const triggerDownload = () => {
-    // Use the print target div — copy resume content into it and print
-    const src = document.getElementById("rm-preview-inner");
-    const dest = document.getElementById("rm-print-target");
-    if (src && dest) {
-      dest.innerHTML = src.innerHTML;
-      dest.style.display = "block";
-      setTimeout(() => {
-        window.print();
-        setTimeout(() => { dest.style.display = "none"; dest.innerHTML = ""; }, 1500);
-      }, 150);
-    } else {
-      window.print();
+    const preview = document.getElementById("rm-preview-inner");
+    if (!preview) {
+      alert("Please switch to the Preview tab first, then click Download PDF.");
+      setMView("preview");
+      return;
     }
+
+    // Collect all inline styles from Google Fonts already loaded in the page
+    const fontLink = Array.from(document.querySelectorAll("link[rel=stylesheet]"))
+      .map(l => `<link rel="stylesheet" href="${l.href}">`)
+      .join("
+");
+
+    // Get all <style> tags from the current page (includes our font imports)
+    const styleTags = Array.from(document.querySelectorAll("style"))
+      .map(s => `<style>${s.textContent}</style>`)
+      .join("
+");
+
+    // Build a complete self-contained HTML document with just the resume
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Resume — ResumeMint</title>
+  ${fontLink}
+  ${styleTags}
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #fff; }
+    @page { margin: 0; size: A4; }
+    @media print { body { margin: 0; } }
+  </style>
+</head>
+<body>
+  ${preview.innerHTML}
+</body>
+</html>`;
+
+    // Open in a new popup window sized to A4
+    const win = window.open("", "_blank", "width=900,height=1200,toolbar=0,menubar=0,scrollbars=1");
+    if (!win) {
+      // Popup blocked — fallback to same-window print
+      const style = document.createElement("style");
+      style.id = "rm-fallback-print";
+      style.textContent = `@media print{@page{margin:0;size:A4;}body>*{display:none!important;}#rm-preview-inner{display:block!important;position:fixed;top:0;left:0;width:100%;z-index:9999;background:#fff;}}`;
+      document.head.appendChild(style);
+      // Make preview visible for print
+      const el = document.getElementById("rm-preview-inner");
+      if(el){ el.style.display="block"; }
+      setTimeout(() => { window.print(); setTimeout(() => { style.remove(); }, 2000); }, 100);
+      return;
+    }
+
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+
+    // Wait for fonts to load, then print
+    win.onload = () => {
+      setTimeout(() => {
+        win.focus();
+        win.print();
+        // Close popup after print dialog — user might cancel so give 3s
+        setTimeout(() => { try { win.close(); } catch(e){} }, 3000);
+      }, 800);
+    };
+
+    // Fallback if onload doesn't fire
+    setTimeout(() => {
+      try {
+        if (!win.closed) {
+          win.focus();
+          win.print();
+          setTimeout(() => { try { win.close(); } catch(e){} }, 3000);
+        }
+      } catch(e) {}
+    }, 2000);
   };
 
   // Shared input styles — autocomplete=off to stop browser popup
@@ -1014,8 +1059,7 @@ function Builder({ onBack, initialForm }) {
 
   return (
     <div className="rm-builder">
-      {/* Hidden print target */}
-      <div id="rm-print-target" />
+      {/* Print styles injected dynamically via triggerDownload */}
 
       {/* TOP BAR */}
       <div className="rm-topbar">
@@ -1189,7 +1233,8 @@ function Builder({ onBack, initialForm }) {
         </div>
 
         {/* PREVIEW PANEL */}
-        <div className="rm-prevpanel" style={{ display: mView === "form" && window.innerWidth < 769 ? "none" : "flex" }}>
+        <div className="rm-prevpanel" style={{ display: mView === "form" ? "none" : "flex" }}
+          id="rm-preview-panel">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 16px", background: C.surface, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
             <div style={{ fontSize: "13px", fontWeight: "600", color: C.text }}>Live Preview · {T.name}</div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -1243,7 +1288,7 @@ export default function App() {
 
   return (<>
     <style>{GS}</style>
-    <div id="rm-print-target" />
+
 
     {page === "landing" && (
       <Landing
