@@ -303,6 +303,7 @@ function PaymentModal({ onClose, onSuccess, form }) {
   const [err, setErr] = useState("");
   const [orderId, setOrderId] = useState("");
   const [countdown, setCountdown] = useState(0);
+  const [wakeMsg, setWakeMsg] = useState("");
   const pollRef = useRef(null);
   const cdRef = useRef(null);
 
@@ -345,15 +346,34 @@ function PaymentModal({ onClose, onSuccess, form }) {
     }, 1000);
   };
 
+  // Wake up Render free-tier server (sleeps after 15 min of inactivity)
+  // Takes up to 50 seconds to wake. We ping with retries until it responds.
+  const wakeServer = async () => {
+    setWakeMsg("Waking up server (first payment of the day may take ~30s)...");
+    for (let attempt = 1; attempt <= 8; attempt++) {
+      try {
+        setWakeMsg(`Connecting to server... (${attempt * 6}s)`);
+        const r = await fetch(`${BACKEND}/`, { signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined });
+        if (r.ok) { setWakeMsg(""); return true; }
+      } catch (e) { /* keep retrying */ }
+      // Wait 4 seconds between attempts
+      await new Promise(res => setTimeout(res, 4000));
+    }
+    return false; // gave up
+  };
+
   const startPay = async () => {
     if (!rateLimit("pay", 5, 300000)) { setErr("Too many attempts. Please wait 5 minutes."); return; }
-    setStep("loading"); setErr("");
+    setStep("loading"); setErr(""); setWakeMsg("");
     try {
-      try { await fetch(`${BACKEND}/`, { signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined }); } catch (e) { }
+      // Wake server first — this is the key fix for Render free tier
+      await wakeServer();
+      setWakeMsg("Creating secure order...");
       const r = await fetch(`${BACKEND}/create-order`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount: 900 }),
       });
+      setWakeMsg("");
       if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || "Server error. Please try again."); }
       const order = await r.json();
       if (!order.id) throw new Error("Invalid order. Please try again.");
@@ -438,10 +458,22 @@ function PaymentModal({ onClose, onSuccess, form }) {
         </>}
 
         {step === "loading" && (
-          <div style={{ padding: "52px 22px", textAlign: "center" }}>
-            <div style={{ width: "44px", height: "44px", border: `3px solid ${C.border}`, borderTop: `3px solid ${C.accent}`, borderRadius: "50%", margin: "0 auto 18px", animation: "spin .8s linear infinite" }} />
-            <div style={{ fontWeight: "700", fontSize: "17px", color: C.text, marginBottom: "6px" }}>Setting up payment...</div>
-            <div style={{ color: C.sub, fontSize: "12px" }}>Connecting to Razorpay securely</div>
+          <div style={{ padding: "48px 22px", textAlign: "center" }}>
+            <div style={{ width: "48px", height: "48px", border: `3px solid ${C.border}`, borderTop: `3px solid ${C.accent}`, borderRadius: "50%", margin: "0 auto 20px", animation: "spin .8s linear infinite" }} />
+            <div style={{ fontWeight: "700", fontSize: "17px", color: C.text, marginBottom: "8px" }}>
+              {wakeMsg && wakeMsg.includes("Waking") ? "Starting up server..." : "Setting up payment..."}
+            </div>
+            <div style={{ color: C.sub, fontSize: "12px", lineHeight: 1.7, minHeight: "36px" }}>
+              {wakeMsg || "Connecting to Razorpay securely..."}
+            </div>
+            {wakeMsg && wakeMsg.includes("Connecting") && (
+              <div style={{ marginTop: "16px", padding: "10px 14px", background: C.bg, borderRadius: "8px", border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: "11px", color: C.muted, lineHeight: 1.7 }}>
+                  ℹ️ Server was sleeping. First payment of the day takes ~30s to start.<br/>
+                  <strong style={{ color: C.sub }}>Please keep this tab open.</strong>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -503,8 +535,15 @@ function AIModal({ onClose, onApply, form }) {
   const analyze = async () => {
     if (jd.trim().length < 50) { setErr("Please paste a complete job description (at least 50 characters)."); return; }
     if (!rateLimit("ai", 3, 60000)) { setErr("Too many requests. Wait 1 minute."); return; }
-    setLoading(true); setErr(""); setStatus("Waking up AI server...");
-    try { await fetch(`${BACKEND}/`, { signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined }); } catch (e) { }
+    setLoading(true); setErr(""); setStatus("Connecting to AI server...");
+    // Wake up Render with retries
+    for (let i = 1; i <= 6; i++) {
+      try {
+        setStatus(`Connecting to server... (${i * 6}s)`);
+        const wr = await fetch(`${BACKEND}/`, { signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined });
+        if (wr.ok) break;
+      } catch (e) { if (i < 6) await new Promise(r => setTimeout(r, 4000)); }
+    }
     setStatus("Analyzing your resume against the JD...");
     try {
       const res = await fetch(`${BACKEND}/ai-job-match`, {
@@ -603,7 +642,13 @@ function UploadModal({ onClose, onExtracted }) {
     setStatus("loading"); setErr("");
     try {
       const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file); });
-      try { await fetch(`${BACKEND}/`, { signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined }); } catch (e) { }
+      // Wake Render with retries
+      for (let i = 1; i <= 6; i++) {
+        try {
+          const wr = await fetch(`${BACKEND}/`, { signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined });
+          if (wr.ok) break;
+        } catch (e) { if (i < 6) await new Promise(r => setTimeout(r, 4000)); }
+      }
       const resp = await fetch(`${BACKEND}/ai-job-match`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
