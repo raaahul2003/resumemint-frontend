@@ -94,6 +94,19 @@ const rateLimit = (k, max, win) => {
   _rl[k].push(now); return true;
 };
 
+// Clean raw API errors into friendly messages
+const cleanErr = (e) => {
+  if (!e) return "Something went wrong. Please try again.";
+  const s = typeof e === "string" ? e : JSON.stringify(e);
+  if (s.includes("credit") || s.includes("balance") || s.includes("quota") || s.includes("529") || s === "AI_QUOTA_EXCEEDED") return "QUOTA";
+  if (s.includes("invalid_api_key") || s.includes("401")) return "AI service config error. Contact support.";
+  if (s.includes("rate_limit") || s.includes("429")) return "QUOTA";
+  if (s.includes("network") || s.includes("fetch") || s.includes("Failed to fetch")) return "Connection error. Please check your internet and try again.";
+  // Hide raw JSON from users
+  if (s.startsWith("{") || s.startsWith("[")) return "AI service error. Please try again in a moment.";
+  return s.length > 120 ? s.slice(0, 120) + "..." : s;
+};
+
 // ── SAFE STORAGE ───────────────────────────────────────────
 const store = {
   get: (k) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } },
@@ -535,14 +548,14 @@ function AIModal({ onClose, onApply, form }) {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        const msg = typeof d.error === "string" ? d.error : JSON.stringify(d.error) || "";
-        if (res.status === 429 || msg === "AI_QUOTA_EXCEEDED" || msg.includes("quota") || msg.includes("credit")) throw new Error("QUOTA");
-        throw new Error("AI service error. Try again in a few minutes.");
+        const msg = cleanErr(d.error || d);
+        if (msg === "QUOTA") throw new Error("QUOTA");
+        throw new Error(msg);
       }
       const data = await res.json();
       if (data.error) {
-        const msg = typeof data.error === "string" ? data.error : JSON.stringify(data.error);
-        if (msg === "AI_QUOTA_EXCEEDED" || msg.includes("quota") || msg.includes("credit")) throw new Error("QUOTA");
+        const msg = cleanErr(data.error);
+        if (msg === "QUOTA") throw new Error("QUOTA");
         throw new Error(msg);
       }
       const text = data.content?.map(b => b.text || "").join("") || "";
