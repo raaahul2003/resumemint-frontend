@@ -945,85 +945,84 @@ function Builder({ onBack, initialForm }) {
   const delC = (i) => setForm(p => ({ ...p, customSections: p.customSections.filter((_, j) => j !== i) }));
 
   const triggerDownload = () => {
-    const preview = document.getElementById("rm-preview-inner");
-    if (!preview) {
-      alert("Please switch to the Preview tab first, then click Download PDF.");
-      setMView("preview");
-      return;
-    }
+    // Switch to preview tab first so the resume is definitely rendered
+    setMView("preview");
 
-    // Collect all inline styles from Google Fonts already loaded in the page
-    const fontLink = Array.from(document.querySelectorAll("link[rel=stylesheet]"))
-      .map(l => `<link rel="stylesheet" href="${l.href}">`)
-      .join("
-");
+    setTimeout(() => {
+      const preview = document.getElementById("rm-preview-inner");
+      if (!preview) {
+        alert("Could not find resume. Please click the Preview tab, then try Download PDF again.");
+        return;
+      }
 
-    // Get all <style> tags from the current page (includes our font imports)
-    const styleTags = Array.from(document.querySelectorAll("style"))
-      .map(s => `<style>${s.textContent}</style>`)
-      .join("
-");
+      // Get the resume's raw HTML (it already has all inline styles)
+      const resumeHTML = preview.innerHTML;
 
-    // Build a complete self-contained HTML document with just the resume
-    const html = `<!DOCTYPE html>
-<html>
+      // Get Google Fonts URL from the page
+      const fontURL = "https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;600&display=swap";
+
+      // Build a completely clean, self-contained HTML page with ONLY the resume
+      // No dark background, no app styles, just white page + resume
+      const fullHTML = `<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Resume — ResumeMint</title>
-  ${fontLink}
-  ${styleTags}
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #fff; }
-    @page { margin: 0; size: A4; }
-    @media print { body { margin: 0; } }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Resume</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="${fontURL}">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: #ffffff !important;
+    color: #000000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  @page { margin: 0; size: A4; }
+  @media print {
+    html, body { background: #ffffff !important; }
+  }
+</style>
 </head>
-<body>
-  ${preview.innerHTML}
+<body style="background:#fff;margin:0;padding:0;">
+${resumeHTML}
 </body>
 </html>`;
 
-    // Open in a new popup window sized to A4
-    const win = window.open("", "_blank", "width=900,height=1200,toolbar=0,menubar=0,scrollbars=1");
-    if (!win) {
-      // Popup blocked — fallback to same-window print
-      const style = document.createElement("style");
-      style.id = "rm-fallback-print";
-      style.textContent = `@media print{@page{margin:0;size:A4;}body>*{display:none!important;}#rm-preview-inner{display:block!important;position:fixed;top:0;left:0;width:100%;z-index:9999;background:#fff;}}`;
-      document.head.appendChild(style);
-      // Make preview visible for print
-      const el = document.getElementById("rm-preview-inner");
-      if(el){ el.style.display="block"; }
-      setTimeout(() => { window.print(); setTimeout(() => { style.remove(); }, 2000); }, 100);
-      return;
-    }
+      // Create a hidden iframe in the current page (avoids popup blocker)
+      let iframe = document.getElementById("rm-print-iframe");
+      if (iframe) iframe.remove();
 
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
+      iframe = document.createElement("iframe");
+      iframe.id = "rm-print-iframe";
+      iframe.style.cssText = "position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;pointer-events:none;";
+      document.body.appendChild(iframe);
 
-    // Wait for fonts to load, then print
-    win.onload = () => {
-      setTimeout(() => {
-        win.focus();
-        win.print();
-        // Close popup after print dialog — user might cancel so give 3s
-        setTimeout(() => { try { win.close(); } catch(e){} }, 3000);
-      }, 800);
-    };
+      // Write the clean HTML into the iframe
+      iframe.contentDocument.open();
+      iframe.contentDocument.write(fullHTML);
+      iframe.contentDocument.close();
 
-    // Fallback if onload doesn't fire
-    setTimeout(() => {
-      try {
-        if (!win.closed) {
-          win.focus();
-          win.print();
-          setTimeout(() => { try { win.close(); } catch(e){} }, 3000);
+      // Wait for iframe content + fonts to load, then print from it
+      const doPrint = () => {
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+          // Clean up after a delay
+          setTimeout(() => {
+            try { iframe.remove(); } catch(e) {}
+          }, 5000);
+        } catch(e) {
+          console.error("iframe print failed, trying window.print", e);
+          window.print();
         }
-      } catch(e) {}
-    }, 2000);
+      };
+
+      // Give fonts 1.2s to load then print
+      setTimeout(doPrint, 1200);
+
+    }, 100); // small delay to let setMView("preview") render
   };
 
   // Shared input styles — autocomplete=off to stop browser popup
