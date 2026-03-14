@@ -1,11 +1,11 @@
-// ResumeMint v8 — Complete Rewrite
+// ResumeMint v9 — Stable inputs, fresher UX, resume tips, Gemini fallback
 // FIXES: localStorage persistence, responsive, autocomplete off, print PDF, payment success state
 import { useState, useEffect, useRef, useCallback } from "react";
 
 const BACKEND = "https://resumemint-backend.onrender.com";
 const RAZORPAY_KEY = "rzp_live_SPxfWRaOw9vYcS";
-const STORAGE_KEY = "resumemint_form_v8";
-const PAID_KEY = "resumemint_paid_v8";
+const STORAGE_KEY = "resumemint_form_v9";
+const PAID_KEY = "resumemint_paid_v9";
 
 // ── THEME ──────────────────────────────────────────────────
 const C = {
@@ -1196,6 +1196,24 @@ ${resumeHTML}
                 <Field label="GitHub URL" value={form.github} onChange={e => upd("github", e.target.value)} placeholder="github.com/yourname" />
                 <Field label="Portfolio / Website" value={form.website} onChange={e => upd("website", e.target.value)} placeholder="yoursite.dev" />
               </div>
+              <div style={{ background: "#1a1a28", border: "1px solid #252535", borderRadius: "12px", padding: "14px 16px", marginBottom: "12px" }}>
+                <div style={{ fontWeight: "700", color: C.text, fontSize: "13px", marginBottom: "10px" }}>💡 Resume Writing Tips</div>
+                {[
+                  ["✅", "Use numbers", "e.g. 'Improved speed by 40%' not 'improved speed'"],
+                  ["✅", "Keep it 1 page", "Recruiters spend <10 seconds on a resume"],
+                  ["✅", "Match the JD", "Use the AI Job Match to tailor for each role"],
+                  ["✅", "Action verbs", "Start bullets with: Built, Led, Designed, Improved"],
+                  ["⚠️", "No photo", "Indian ATS systems ignore photos — skip it"],
+                ].map(([icon, title, tip], i) => (
+                  <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "7px", alignItems: "flex-start" }}>
+                    <span style={{ fontSize: "12px", flexShrink: 0 }}>{icon}</span>
+                    <div>
+                      <span style={{ fontSize: "12px", color: C.text, fontWeight: "600" }}>{title}: </span>
+                      <span style={{ fontSize: "12px", color: C.sub }}>{tip}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
               <div style={card}>
                 <TextArea label="Professional Summary" value={form.summary} onChange={e => upd("summary", e.target.value)} placeholder="3-4 sentences about your skills, experience, and target role." rows={4} hint="Tip: mention your target role, years of experience, and 2-3 key skills." />
 
@@ -1219,11 +1237,30 @@ ${resumeHTML}
             </>}
 
             {tab === "experience" && <>
+              <div style={{ background: C.accentDim, border: `1px solid ${C.accentBorder}`, borderRadius: "10px", padding: "12px 14px", marginBottom: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
+                <div style={{ fontSize: "12px", color: C.sub }}>
+                  🎓 <strong style={{ color: C.text }}>Fresher?</strong> You can skip experience and focus on projects & skills.
+                </div>
+                <button onClick={() => { setForm(p => ({ ...p, experience: [] })); }} style={{ padding: "5px 12px", background: "transparent", border: `1px solid ${C.border}`, color: C.sub, borderRadius: "6px", fontSize: "11px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                  Clear All
+                </button>
+              </div>
+              {form.experience.length === 0 && (
+                <div style={{ ...card, textAlign: "center", padding: "28px 16px" }}>
+                  <div style={{ fontSize: "32px", marginBottom: "10px" }}>💼</div>
+                  <div style={{ color: C.sub, fontSize: "13px", marginBottom: "14px", lineHeight: 1.7 }}>
+                    No experience added.<br/>That's okay for freshers!<br/>Add internships, part-time, or freelance work.
+                  </div>
+                  <button onClick={() => addR("experience", { role: "", company: "", duration: "", bullets: "" })} style={{ padding: "9px 20px", background: C.accent, border: "none", color: "#000", borderRadius: "8px", fontSize: "13px", fontWeight: "700", cursor: "pointer" }}>
+                    + Add Experience
+                  </button>
+                </div>
+              )}
               {form.experience.map((e, i) => (
                 <div key={i} style={card}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                     <div style={{ fontWeight: "700", color: C.text, fontSize: "14px" }}>Experience {form.experience.length > 1 ? `#${i + 1}` : ""}</div>
-                    {form.experience.length > 1 && <button onClick={() => delR("experience", i)} style={rmbtn}>✕ Remove</button>}
+                    <button onClick={() => delR("experience", i)} style={rmbtn}>✕ Remove</button>
                   </div>
                   <Field label="Job Title" value={e.role} onChange={ev => updA("experience", i, "role", ev.target.value)} placeholder="Software Developer Intern" />
                   <Field label="Company & Location" value={e.company} onChange={ev => updA("experience", i, "company", ev.target.value)} placeholder="Razorpay, Bangalore" />
@@ -1236,6 +1273,9 @@ ${resumeHTML}
             </>}
 
             {tab === "projects" && <>
+              <div style={{ background: C.accentDim, border: `1px solid ${C.accentBorder}`, borderRadius: "10px", padding: "11px 14px", marginBottom: "12px", fontSize: "12px", color: C.sub, lineHeight: 1.7 }}>
+                🚀 <strong style={{ color: C.text }}>Freshers:</strong> Projects are your experience! Add college projects, personal projects, or anything you built. Aim for 2-3 strong projects.
+              </div>
               {form.projects.map((p, i) => (
                 <div key={i} style={card}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
@@ -1251,7 +1291,11 @@ ${resumeHTML}
               <button onClick={() => addR("projects", { name: "", tech: "", description: "", link: "" })} style={addbtn}>+ Add Project</button>
             </>}
 
-            {tab === "skills" && <div style={card}>
+            {tab === "skills" && <>
+              <div style={{ background: C.accentDim, border: `1px solid ${C.accentBorder}`, borderRadius: "10px", padding: "11px 14px", marginBottom: "12px", fontSize: "12px", color: C.sub, lineHeight: 1.7 }}>
+                🛠 <strong style={{ color: C.text }}>Tip:</strong> List only skills you actually know. Match skills from the job description. Use the AI Job Match to add missing keywords.
+              </div>
+            <div style={card}>
               <div style={{ fontWeight: "700", color: C.text, fontSize: "14px", marginBottom: "14px" }}>Skills & Qualifications</div>
               <Field label="Technical Skills (comma separated)" value={form.skills.technical} onChange={e => updS("technical", e.target.value)} placeholder="React, Node.js, MongoDB, Git, Docker, AWS" />
               <Field label="Programming Languages" value={form.skills.languages} onChange={e => updS("languages", e.target.value)} placeholder="Java, JavaScript, Python, C++, SQL" />
@@ -1261,7 +1305,9 @@ ${resumeHTML}
                 <TextArea label="Certifications (one per line)" value={form.certifications} onChange={e => upd("certifications", e.target.value)} placeholder={"AWS Cloud Practitioner (2024)\nGoogle Analytics Certificate"} rows={3} />
                 <TextArea label="Achievements / Activities" value={form.achievements} onChange={e => upd("achievements", e.target.value)} placeholder={"Winner — Hackathon 2024\nGoogle DSC Lead"} rows={3} />
               </div>
-            </div>}
+            </div>
+            </>
+}
 
             {tab === "extra" && <>
               <div style={{ ...card, background: C.accentDim, border: `1px solid ${C.accentBorder}`, color: C.sub, fontSize: "12px", lineHeight: 1.7 }}>
