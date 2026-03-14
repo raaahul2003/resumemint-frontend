@@ -904,6 +904,70 @@ function Landing({ onStart, onUpload, onAdmin }) {
   );
 }
 
+
+// ══════════════════════════════════════════════════════════
+// STABLE FIELD COMPONENTS — defined outside Builder so they
+// never remount on re-render (fixes typing/space issues)
+// ══════════════════════════════════════════════════════════
+const FIELD_STYLE = {
+  width: "100%",
+  padding: "11px 13px",
+  background: "#0d0d14",
+  border: "1px solid #252535",
+  borderRadius: "9px",
+  color: "#f0f0ff",
+  fontSize: "14px",
+  outline: "none",
+  marginBottom: "12px",
+  lineHeight: "1.5",
+  fontFamily: "'Outfit', sans-serif",
+  transition: "border-color .15s",
+  boxSizing: "border-box",
+  display: "block",
+};
+const LABEL_STYLE = {
+  fontSize: "11px", color: "#8888aa", display: "block",
+  marginBottom: "5px", fontWeight: "600",
+  textTransform: "uppercase", letterSpacing: "0.5px",
+};
+
+function Field({ label, value, onChange, placeholder, type, hint }) {
+  return (
+    <div style={{ marginBottom: "2px" }}>
+      {label && <label style={LABEL_STYLE}>{label}</label>}
+      <input
+        type={type || "text"}
+        value={value || ""}
+        onChange={onChange}
+        placeholder={placeholder || ""}
+        style={FIELD_STYLE}
+        onFocus={e => { e.target.style.borderColor = "#22c55e"; }}
+        onBlur={e => { e.target.style.borderColor = "#252535"; }}
+      />
+      {hint && <div style={{ fontSize: "11px", color: "#44445a", marginTop: "-8px", marginBottom: "10px", lineHeight: 1.5 }}>{hint}</div>}
+    </div>
+  );
+}
+
+function TextArea({ label, value, onChange, placeholder, rows, hint }) {
+  return (
+    <div style={{ marginBottom: "2px" }}>
+      {label && <label style={LABEL_STYLE}>{label}</label>}
+      <textarea
+        value={value || ""}
+        onChange={onChange}
+        placeholder={placeholder || ""}
+        rows={rows || 4}
+        style={{ ...FIELD_STYLE, resize: "vertical", height: "auto", minHeight: `${(rows || 4) * 24}px` }}
+        onFocus={e => { e.target.style.borderColor = "#22c55e"; }}
+        onBlur={e => { e.target.style.borderColor = "#252535"; }}
+      />
+      {hint && <div style={{ fontSize: "11px", color: "#44445a", marginTop: "-8px", marginBottom: "10px", lineHeight: 1.5 }}>{hint}</div>}
+    </div>
+  );
+}
+
+
 // ══════════════════════════════════════════════════════════
 // BUILDER — fully responsive, localStorage, no autocomplete
 // ══════════════════════════════════════════════════════════
@@ -1025,13 +1089,7 @@ ${resumeHTML}
     }, 100); // small delay to let setMView("preview") render
   };
 
-  // Shared input styles — autocomplete=off to stop browser popup
-  const inp = {
-    width: "100%", padding: "10px 12px", background: C.bg,
-    border: `1px solid ${C.border}`, borderRadius: "8px", color: C.text,
-    fontSize: "13px", outline: "none", marginBottom: "10px", lineHeight: 1.5,
-  };
-  const lbl = { fontSize: "11px", color: C.sub, display: "block", marginBottom: "4px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.4px" };
+  // Field/TextArea components handle their own styles (defined outside Builder)
   const card = { background: C.card, border: `1px solid ${C.border}`, borderRadius: "12px", padding: "16px", marginBottom: "12px" };
   const rmbtn = { padding: "4px 10px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontWeight: "600" };
   const addbtn = { width: "100%", padding: "10px", background: "transparent", border: `1px dashed ${C.border}`, color: C.accent, borderRadius: "9px", fontSize: "13px", fontWeight: "600", cursor: "pointer", marginTop: "2px" };
@@ -1045,16 +1103,7 @@ ${resumeHTML}
     { id: "extra", icon: "➕", label: "Extra" },
   ];
 
-  // Input component with autocomplete=off
-  const Inp = ({ label, value, onChange, placeholder, type = "text", big }) => (
-    <div>
-      {label && <label style={lbl}>{label}</label>}
-      {big
-        ? <textarea className="rm-inp" style={{ ...inp, height: big, resize: "vertical" }} value={value} onChange={onChange} placeholder={placeholder} autoComplete="off" />
-        : <input className="rm-inp" type={type} style={inp} value={value} onChange={onChange} placeholder={placeholder} autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false" />
-      }
-    </div>
-  );
+  // Field and TextArea components defined outside Builder for stability
 
   return (
     <div className="rm-builder">
@@ -1126,17 +1175,17 @@ ${resumeHTML}
             {tab === "personal" && <>
               <div style={card}>
                 <div style={{ fontWeight: "700", color: C.text, fontSize: "14px", marginBottom: "14px" }}>Contact Information</div>
-                <Inp label="Full Name" value={form.name} onChange={e => upd("name", e.target.value)} placeholder="e.g. Arjun Sharma" />
-                <Inp label="Email Address" value={form.email} onChange={e => upd("email", e.target.value)} placeholder="arjun@gmail.com" type="email" />
-                <Inp label="Phone" value={form.phone} onChange={e => upd("phone", e.target.value)} placeholder="+91 98765 43210" />
-                <Inp label="City, State" value={form.location} onChange={e => upd("location", e.target.value)} placeholder="Bangalore, Karnataka" />
-                <Inp label="LinkedIn URL" value={form.linkedin} onChange={e => upd("linkedin", e.target.value)} placeholder="linkedin.com/in/yourname" />
-                <Inp label="GitHub URL" value={form.github} onChange={e => upd("github", e.target.value)} placeholder="github.com/yourname" />
-                <Inp label="Portfolio / Website" value={form.website} onChange={e => upd("website", e.target.value)} placeholder="yoursite.dev" />
+                <Field label="Full Name" value={form.name} onChange={e => upd("name", e.target.value)} placeholder="e.g. Arjun Sharma" />
+                <Field label="Email Address" value={form.email} onChange={e => upd("email", e.target.value)} placeholder="arjun@gmail.com" type="email" />
+                <Field label="Phone" value={form.phone} onChange={e => upd("phone", e.target.value)} placeholder="+91 98765 43210" />
+                <Field label="City, State" value={form.location} onChange={e => upd("location", e.target.value)} placeholder="Bangalore, Karnataka" />
+                <Field label="LinkedIn URL" value={form.linkedin} onChange={e => upd("linkedin", e.target.value)} placeholder="linkedin.com/in/yourname" />
+                <Field label="GitHub URL" value={form.github} onChange={e => upd("github", e.target.value)} placeholder="github.com/yourname" />
+                <Field label="Portfolio / Website" value={form.website} onChange={e => upd("website", e.target.value)} placeholder="yoursite.dev" />
               </div>
               <div style={card}>
-                <Inp label="Professional Summary" value={form.summary} onChange={e => upd("summary", e.target.value)} placeholder="3-4 sentences about your skills, experience, and target role." big="90px" />
-                <div style={{ fontSize: "11px", color: C.muted, marginTop: "-4px" }}>Tip: mention your target role, years of experience, and 2-3 key skills.</div>
+                <TextArea label="Professional Summary" value={form.summary} onChange={e => upd("summary", e.target.value)} placeholder="3-4 sentences about your skills, experience, and target role." rows={4} hint="Tip: mention your target role, years of experience, and 2-3 key skills." />
+
               </div>
             </>}
 
@@ -1147,10 +1196,10 @@ ${resumeHTML}
                     <div style={{ fontWeight: "700", color: C.text, fontSize: "14px" }}>Education {form.education.length > 1 ? `#${i + 1}` : ""}</div>
                     {form.education.length > 1 && <button onClick={() => delR("education", i)} style={rmbtn}>✕ Remove</button>}
                   </div>
-                  <Inp label="Degree / Course" value={e.degree} onChange={ev => updA("education", i, "degree", ev.target.value)} placeholder="B.Tech Computer Science" />
-                  <Inp label="College / University" value={e.school} onChange={ev => updA("education", i, "school", ev.target.value)} placeholder="NIT Trichy, Tamil Nadu" />
-                  <Inp label="Year" value={e.year} onChange={ev => updA("education", i, "year", ev.target.value)} placeholder="2021–2025" />
-                  <Inp label="CGPA / Percentage" value={e.gpa} onChange={ev => updA("education", i, "gpa", ev.target.value)} placeholder="8.5 CGPA" />
+                  <Field label="Degree / Course" value={e.degree} onChange={ev => updA("education", i, "degree", ev.target.value)} placeholder="B.Tech Computer Science" />
+                  <Field label="College / University" value={e.school} onChange={ev => updA("education", i, "school", ev.target.value)} placeholder="NIT Trichy, Tamil Nadu" />
+                  <Field label="Year" value={e.year} onChange={ev => updA("education", i, "year", ev.target.value)} placeholder="2021–2025" />
+                  <Field label="CGPA / Percentage" value={e.gpa} onChange={ev => updA("education", i, "gpa", ev.target.value)} placeholder="8.5 CGPA" />
                 </div>
               ))}
               <button onClick={() => addR("education", { degree: "", school: "", year: "", gpa: "" })} style={addbtn}>+ Add Education</button>
@@ -1163,11 +1212,11 @@ ${resumeHTML}
                     <div style={{ fontWeight: "700", color: C.text, fontSize: "14px" }}>Experience {form.experience.length > 1 ? `#${i + 1}` : ""}</div>
                     {form.experience.length > 1 && <button onClick={() => delR("experience", i)} style={rmbtn}>✕ Remove</button>}
                   </div>
-                  <Inp label="Job Title" value={e.role} onChange={ev => updA("experience", i, "role", ev.target.value)} placeholder="Software Developer Intern" />
-                  <Inp label="Company & Location" value={e.company} onChange={ev => updA("experience", i, "company", ev.target.value)} placeholder="Razorpay, Bangalore" />
-                  <Inp label="Duration" value={e.duration} onChange={ev => updA("experience", i, "duration", ev.target.value)} placeholder="Jun 2024 – Aug 2024" />
-                  <Inp label="Key Achievements (one per line — use numbers)" value={e.bullets} onChange={ev => updA("experience", i, "bullets", ev.target.value)} placeholder={"Built X reducing time by 40%\nProcessed 10k+ events/day\nImproved test coverage to 90%"} big="100px" />
-                  <div style={{ fontSize: "11px", color: C.muted, marginTop: "-4px" }}>Tip: Start each line with an action verb. Use numbers for impact.</div>
+                  <Field label="Job Title" value={e.role} onChange={ev => updA("experience", i, "role", ev.target.value)} placeholder="Software Developer Intern" />
+                  <Field label="Company & Location" value={e.company} onChange={ev => updA("experience", i, "company", ev.target.value)} placeholder="Razorpay, Bangalore" />
+                  <Field label="Duration" value={e.duration} onChange={ev => updA("experience", i, "duration", ev.target.value)} placeholder="Jun 2024 – Aug 2024" />
+                  <TextArea label="Key Achievements (one per line)" value={e.bullets} onChange={ev => updA("experience", i, "bullets", ev.target.value)} placeholder={"Built X reducing time by 40%\nProcessed 10k+ events/day\nImproved test coverage to 90%"} rows={5} hint="Tip: Start each line with an action verb. Use numbers for impact." />
+
                 </div>
               ))}
               <button onClick={() => addR("experience", { role: "", company: "", duration: "", bullets: "" })} style={addbtn}>+ Add Experience</button>
@@ -1180,10 +1229,10 @@ ${resumeHTML}
                     <div style={{ fontWeight: "700", color: C.text, fontSize: "14px" }}>Project {form.projects.length > 1 ? `#${i + 1}` : ""}</div>
                     {form.projects.length > 1 && <button onClick={() => delR("projects", i)} style={rmbtn}>✕ Remove</button>}
                   </div>
-                  <Inp label="Project Name" value={p.name} onChange={ev => updA("projects", i, "name", ev.target.value)} placeholder="ATS Resume Builder" />
-                  <Inp label="Tech Stack" value={p.tech} onChange={ev => updA("projects", i, "tech", ev.target.value)} placeholder="React, Node.js, MongoDB" />
-                  <Inp label="GitHub / Live Link" value={p.link} onChange={ev => updA("projects", i, "link", ev.target.value)} placeholder="github.com/yourname/project" />
-                  <Inp label="Description & Impact" value={p.description} onChange={ev => updA("projects", i, "description", ev.target.value)} placeholder="Built for X users. Achieved Y. Used Z." big="65px" />
+                  <Field label="Project Name" value={p.name} onChange={ev => updA("projects", i, "name", ev.target.value)} placeholder="ATS Resume Builder" />
+                  <Field label="Tech Stack" value={p.tech} onChange={ev => updA("projects", i, "tech", ev.target.value)} placeholder="React, Node.js, MongoDB" />
+                  <Field label="GitHub / Live Link" value={p.link} onChange={ev => updA("projects", i, "link", ev.target.value)} placeholder="github.com/yourname/project" />
+                  <TextArea label="Description & Impact" value={p.description} onChange={ev => updA("projects", i, "description", ev.target.value)} placeholder="Built for X users. Achieved Y. Used Z." rows={3} />
                 </div>
               ))}
               <button onClick={() => addR("projects", { name: "", tech: "", description: "", link: "" })} style={addbtn}>+ Add Project</button>
@@ -1191,13 +1240,13 @@ ${resumeHTML}
 
             {tab === "skills" && <div style={card}>
               <div style={{ fontWeight: "700", color: C.text, fontSize: "14px", marginBottom: "14px" }}>Skills & Qualifications</div>
-              <Inp label="Technical Skills (comma separated)" value={form.skills.technical} onChange={e => updS("technical", e.target.value)} placeholder="React, Node.js, MongoDB, Git, Docker, AWS" />
-              <Inp label="Programming Languages" value={form.skills.languages} onChange={e => updS("languages", e.target.value)} placeholder="Java, JavaScript, Python, C++, SQL" />
-              <Inp label="Tools & Platforms" value={form.skills.tools} onChange={e => updS("tools", e.target.value)} placeholder="VS Code, Postman, Figma, Jira, Linux" />
-              <Inp label="Soft Skills" value={form.skills.soft} onChange={e => updS("soft", e.target.value)} placeholder="Leadership, Communication, Problem Solving" />
+              <Field label="Technical Skills (comma separated)" value={form.skills.technical} onChange={e => updS("technical", e.target.value)} placeholder="React, Node.js, MongoDB, Git, Docker, AWS" />
+              <Field label="Programming Languages" value={form.skills.languages} onChange={e => updS("languages", e.target.value)} placeholder="Java, JavaScript, Python, C++, SQL" />
+              <Field label="Tools & Platforms" value={form.skills.tools} onChange={e => updS("tools", e.target.value)} placeholder="VS Code, Postman, Figma, Jira, Linux" />
+              <Field label="Soft Skills" value={form.skills.soft} onChange={e => updS("soft", e.target.value)} placeholder="Leadership, Communication, Problem Solving" />
               <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: "14px", marginTop: "4px" }}>
-                <Inp label="Certifications (one per line)" value={form.certifications} onChange={e => upd("certifications", e.target.value)} placeholder={"AWS Cloud Practitioner (2024)\nGoogle Analytics Certificate"} big="70px" />
-                <Inp label="Achievements / Activities" value={form.achievements} onChange={e => upd("achievements", e.target.value)} placeholder={"Winner — Hackathon 2024\nGoogle DSC Lead"} big="62px" />
+                <TextArea label="Certifications (one per line)" value={form.certifications} onChange={e => upd("certifications", e.target.value)} placeholder={"AWS Cloud Practitioner (2024)\nGoogle Analytics Certificate"} rows={3} />
+                <TextArea label="Achievements / Activities" value={form.achievements} onChange={e => upd("achievements", e.target.value)} placeholder={"Winner — Hackathon 2024\nGoogle DSC Lead"} rows={3} />
               </div>
             </div>}
 
@@ -1211,8 +1260,8 @@ ${resumeHTML}
                     <div style={{ fontWeight: "700", color: C.text, fontSize: "13px" }}>Custom Section {i + 1}</div>
                     <button onClick={() => delC(i)} style={rmbtn}>✕ Remove</button>
                   </div>
-                  <Inp label="Section Title" value={sec.title} onChange={e => updC(i, "title", e.target.value)} placeholder="e.g. Volunteer Work" />
-                  <Inp label="Content (one item per line)" value={sec.content} onChange={e => updC(i, "content", e.target.value)} placeholder={"Volunteer Teacher — Teach For India (2023)\nFluent in English, Hindi, Kannada"} big="88px" />
+                  <Field label="Section Title" value={sec.title} onChange={e => updC(i, "title", e.target.value)} placeholder="e.g. Volunteer Work" />
+                  <TextArea label="Content (one item per line)" value={sec.content} onChange={e => updC(i, "content", e.target.value)} placeholder={"Volunteer Teacher — Teach For India (2023)\nFluent in English, Hindi, Kannada"} rows={4} />
                 </div>
               ))}
               <button onClick={addC} style={{ ...addbtn, border: `1px dashed ${C.accent}`, color: C.accent }}>+ Add Custom Section</button>
